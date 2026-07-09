@@ -13,8 +13,17 @@ Deliberat MINIMAL:
 Ruleaza din radacina proiectului:
     python test_training.py
 """
+import os
+
+# Conectare la serverul MLflow local
+os.environ["MLFLOW_TRACKING_URI"] = "http://127.0.0.1:5000"
+os.environ["MLFLOW_EXPERIMENT_NAME"] = "ppe-detection"
+
+# Ultralytics detectează automat MLflow și face autolog dacă e instalat
+
 from ultralytics import YOLO
 import torch
+
 
 def main():
     print("CUDA disponibil:", torch.cuda.is_available())

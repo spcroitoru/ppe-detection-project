@@ -1,0 +1,29 @@
+# data.yaml - configuratie dataset PPE Detection
+# CORECTAT manual pe baza investigatiei:
+#   - fisierul original de pe Kaggle avea nc: 9 dar 10 nume listate (inconsistent)
+#   - analiza etichetelor (labels/*.txt) a aratat 11 id-uri de clasa distincte (0-10)
+#   - clasa 10 lipsea complet din lista - identificata VIZUAL (Pas 2) ca fiind
+#     "maini fara manusi" -> denumita NO_Gloves, conform conventiei existente
+#     (NO_helmet, NO_Vest, NO_goggles)
+#   - path-urile originale erau din Google Colab (/content/dataset...) - inlocuite
+#     cu path-uri locale relative
+
+path: ./data_raw   # radacina dataset-ului, relativa la locul unde rulezi scriptul
+train: train/images
+val: val/images
+test: test/images
+
+nc: 11
+
+names:
+  0: Helmet
+  1: Safety_Vest
+  2: Safety_goggles
+  3: Safety_shoes
+  4: NO_helmet
+  5: NO_Vest
+  6: NO_goggles
+  7: No_SafetyShoes
+  8: Person
+  9: Slippers
+  10: NO_Gloves

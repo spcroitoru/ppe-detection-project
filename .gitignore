@@ -1,0 +1,37 @@
+﻿# Python
+venv/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+
+# Date (prea mari pentru git - se descarca separat de pe Kaggle)
+data/
+data_raw/
+*.zip
+
+# Rezultate de antrenare (grafice, greutati model, etc. - regenerabile)
+runs_test/
+runs/
+class10_examples/
+structura.txt
+
+# MLflow
+mlruns/
+mlartifacts/
+
+# Modele antrenate
+*.pt
+*.pth
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Docker
+*.log

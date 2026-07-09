@@ -51,9 +51,9 @@ pip install -r requirements.txt
 ## Status pași
 
 - [x] Pas 1: Repo + env Python
-- [ ] Pas 2: Exemplu dataset + cod sursa functional
-- [ ] Pas 3: EDA
-- [ ] Pas 4: Integrare MLflow
+- [x] Pas 2: Exemplu dataset + cod sursa functional
+- [x] Pas 3: EDA
+- [x] Pas 4: Integrare MLflow
 - [ ] Pas 5: Refactorizare cod
 - [ ] Pas 6: Pipeline train/val/test + early stopping + LR scheduler
 - [ ] Pas 7: Experimentare configuratii

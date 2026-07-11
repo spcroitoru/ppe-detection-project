@@ -1,9 +1,9 @@
 """
-Script de investigare: extrage si salveaza cateva exemple de imagini
-care contin obiecte din clasa necunoscuta (id 10), cu bounding box-ul
-desenat pe ele, ca sa putem identifica vizual ce reprezinta.
+Investigation script: extracts and saves a few example images that contain
+objects from the unknown class (id 10), with the bounding box drawn on them,
+so we can visually identify what it represents.
 
-Ruleaza din radacina proiectului (ppe-detection-project):
+Run from the project root (ppe-detection-project):
     python investigate_class10.py
 """
 import glob
@@ -28,12 +28,12 @@ for label_path in label_files:
     with open(label_path) as f:
         lines = [l.strip() for l in f if l.strip()]
 
-    # verificam daca acest fisier contine clasa 10
+    # check whether this file contains class 10
     target_boxes = [l.split() for l in lines if l.split()[0] == TARGET_CLASS_ID]
     if not target_boxes:
         continue
 
-    # gasim imaginea corespunzatoare (acelasi nume, extensie posibil diferita)
+    # find the matching image (same name, extension may differ)
     base_name = os.path.splitext(os.path.basename(label_path))[0]
     image_path = None
     for ext in [".jpg", ".jpeg", ".png"]:
@@ -51,7 +51,7 @@ for label_path in label_files:
 
     h, w = img.shape[:2]
 
-    # desenam TOATE box-urile din imagine (context), cu cel/cele de clasa 10 evidentiat cu rosu gros
+    # draw ALL boxes in the image (for context), with class 10 highlighted in thick red
     for parts in [l.split() for l in lines]:
         cls_id, xc, yc, bw, bh = parts[:5]
         xc, yc, bw, bh = float(xc), float(yc), float(bw), float(bh)
@@ -61,11 +61,11 @@ for label_path in label_files:
         y2 = int((yc + bh / 2) * h)
 
         if cls_id == TARGET_CLASS_ID:
-            color = (0, 0, 255)  # rosu = clasa necunoscuta
+            color = (0, 0, 255)  # red = unknown class
             thickness = 3
-            label = "CLASA 10 (necunoscuta)"
+            label = "CLASS 10 (unknown)"
         else:
-            color = (0, 255, 0)  # verde = restul claselor, doar pentru context
+            color = (0, 255, 0)  # green = other classes, for context only
             thickness = 1
             label = f"id={cls_id}"
 
@@ -73,10 +73,10 @@ for label_path in label_files:
         cv2.putText(img, label, (x1, max(y1 - 5, 10)),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
-    out_path = os.path.join(OUTPUT_DIR, f"exemplu_{found}_{base_name}.jpg")
+    out_path = os.path.join(OUTPUT_DIR, f"example_{found}_{base_name}.jpg")
     cv2.imwrite(out_path, img)
     found += 1
-    print(f"Salvat: {out_path}")
+    print(f"Saved: {out_path}")
 
-print(f"\nGata! {found} exemple salvate in folderul '{OUTPUT_DIR}/'.")
-print("Deschide-le si uita-te la ce e incadrat cu ROSU (clasa 10).")
+print(f"\nDone! {found} examples saved in the '{OUTPUT_DIR}/' folder.")
+print("Open them and look at what's framed in RED (class 10).")

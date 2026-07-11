@@ -6,5 +6,6 @@ Kept for historical reference, but functionally replaced by:
 - `smoke_test_training.py` -> `scripts/run_training.py` + `src/train.py`
 - `webcam_test.py` (simple variant, default Ultralytics colors) -> `scripts/run_webcam.py` + `src/inference.py`
 - `webcam_test_colored.py` (manual green/red color variant) -> `scripts/run_webcam.py` + `src/inference.py`
+- `investigate_class10.py` - one-off investigation script used to identify class 10 (NO_Gloves) visually; no longer needed, kept for reference
 
-No longer actively maintained and may not work if the project structure changes.
+No longer actively maintained and may not work if the project structure changes.if the project structure changes.

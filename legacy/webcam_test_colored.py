@@ -1,34 +1,34 @@
 """
-Testeaza modelul antrenat (smoke test, 3 epoci) live, pe camera web.
-Cutiile sunt colorate manual: VERDE = echipament prezent/corect,
-ROSU = echipament lipsa/incalcare (clase care incep cu "NO_"/"No_", sau "Slippers").
+Tests the trained model (smoke test, 3 epochs) live, on the webcam.
+Boxes are colored manually: GREEN = PPE present/correct,
+RED = PPE missing/violation (classes starting with "NO_"/"No_", or "Slippers").
 
-ATENTIE: modelul e antrenat doar 3 epoci - e normal sa detecteze putin,
-gresit, sau deloc. Scopul e sa confirmam ca partea de INFERENTA LIVE
-functioneaza tehnic (cadru -> model -> afisare cutii), nu sa avem
-deja un model bun.
+NOTE: the model is trained for only 3 epochs - it's expected to detect little,
+incorrectly, or not at all. The goal is to confirm that the LIVE INFERENCE
+part works technically (frame -> model -> box display), not to already
+have a good model.
 
-Ruleaza din radacina proiectului:
+Run from the project root:
     python webcam_test.py
 
-Apasa 'q' in fereastra video ca sa inchizi.
+Press 'q' in the video window to quit.
 """
 import cv2
 from ultralytics import YOLO
 
 MODEL_PATH = "C:/Users/croit/Documents/Proiect/ppe-detection-project/runs/detect/runs_test/smoke_test/weights/best.pt"
 
-# clase care semnaleaza lipsa echipamentului / incalcare -> ROSU
-# restul claselor (Helmet, Safety_Vest, etc.) -> VERDE
-CLASE_ROSU = {"NO_helmet", "NO_Vest", "NO_goggles", "No_SafetyShoes", "NO_Gloves", "Slippers"}
+# classes that signal missing/violated PPE -> RED
+# all other classes (Helmet, Safety_Vest, etc.) -> GREEN
+RED_CLASSES = {"NO_helmet", "NO_Vest", "NO_goggles", "No_SafetyShoes", "NO_Gloves", "Slippers"}
 
-COLOR_VERDE = (0, 200, 0)   # BGR (OpenCV foloseste BGR, nu RGB)
-COLOR_ROSU = (0, 0, 255)
+COLOR_GREEN = (0, 200, 0)   # BGR (OpenCV uses BGR, not RGB)
+COLOR_RED = (0, 0, 255)
 
 def main():
     model = YOLO(MODEL_PATH)
 
-    # stream=True = proceseaza continuu cadre de la camera, fara sa desenam automat (show=False)
+    # stream=True = continuously process frames from the camera, without auto-drawing (show=False)
     results_generator = model.predict(
         source=0,
         stream=True,
@@ -46,14 +46,14 @@ def main():
             conf = float(box.conf[0])
             x1, y1, x2, y2 = map(int, box.xyxy[0])
 
-            color = COLOR_ROSU if cls_name in CLASE_ROSU else COLOR_VERDE
+            color = COLOR_RED if cls_name in RED_CLASSES else COLOR_GREEN
 
             cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
             label = f"{cls_name} {conf:.2f}"
             cv2.putText(frame, label, (x1, max(y1 - 8, 10)),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
-        cv2.imshow("PPE Detection - apasa 'q' pentru iesire", frame)
+        cv2.imshow("PPE Detection - press 'q' to quit", frame)
 
         if cv2.waitKey(1) & 0xFF == ord("q"):
             break

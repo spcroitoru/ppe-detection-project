@@ -5,6 +5,7 @@ now reusable across training/cleaning scripts.
 """
 import glob
 import os
+import random
 
 from src.config import DATA_ROOT
 
@@ -97,3 +98,56 @@ def check_data_quality(split: str) -> dict:
         "empty_labels": empty_labels,
         "invalid_bounding_boxes": len(invalid_boxes),
     }
+
+def resplit_train_val(train_ratio: float = 0.9, seed: int = 0) -> dict:
+    """
+    Combines the current train + val images into one pool, shuffles them
+    (with a fixed seed for reproducibility), and writes two list files
+    (train_split.txt, val_split.txt) with the new 90/10 split.
+    Does NOT move any files on disk - only generates the split lists.
+    The test set is left completely untouched.
+    """
+    train_images = list_images("train")
+    val_images = list_images("val")
+    all_images = train_images + val_images
+
+    random.seed(seed)
+    random.shuffle(all_images)
+
+    split_point = int(len(all_images) * train_ratio)
+    new_train = all_images[:split_point]
+    new_val = all_images[split_point:]
+
+    train_list_path = os.path.join(DATA_ROOT, "train_split.txt")
+    val_list_path = os.path.join(DATA_ROOT, "val_split.txt")
+
+    with open(train_list_path, "w") as f:
+        f.write("\n".join(new_train))
+    with open(val_list_path, "w") as f:
+        f.write("\n".join(new_val))
+
+    return {
+        "total_images": len(all_images),
+        "new_train_count": len(new_train),
+        "new_val_count": len(new_val),
+        "train_list_path": train_list_path,
+        "val_list_path": val_list_path,
+    }
+
+def convert_jfif_to_jpg(split: str) -> int:
+    """
+    Renames .jfif files to .jpg within a split's images folder.
+    .jfif is binary-identical to JPEG; Ultralytics' IMG_FORMATS list doesn't
+    include .jfif, so these files were silently skipped during training scans.
+    Returns the number of files renamed.
+    """
+    img_dir = os.path.join(DATA_ROOT, split, "images")
+    jfif_files = glob.glob(os.path.join(img_dir, "*.jfif"))
+
+    renamed = 0
+    for old_path in jfif_files:
+        new_path = os.path.splitext(old_path)[0] + ".jpg"
+        os.rename(old_path, new_path)
+        renamed += 1
+
+    return renamed

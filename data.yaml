@@ -1,16 +1,16 @@
-# data.yaml - configuratie dataset PPE Detection
-# CORECTAT manual pe baza investigatiei:
-#   - fisierul original de pe Kaggle avea nc: 9 dar 10 nume listate (inconsistent)
-#   - analiza etichetelor (labels/*.txt) a aratat 11 id-uri de clasa distincte (0-10)
-#   - clasa 10 lipsea complet din lista - identificata VIZUAL (Pas 2) ca fiind
-#     "maini fara manusi" -> denumita NO_Gloves, conform conventiei existente
+# data.yaml - PPE Detection dataset configuration
+# MANUALLY CORRECTED based on investigation:
+#   - the original file from Kaggle had nc: 9 but 10 names listed (inconsistent)
+#   - label analysis (labels/*.txt) showed 11 distinct class ids (0-10)
+#   - class 10 was completely missing from the list - identified VISUALLY as
+#     "hands without gloves" -> named NO_Gloves, following the existing convention
 #     (NO_helmet, NO_Vest, NO_goggles)
-#   - path-urile originale erau din Google Colab (/content/dataset...) - inlocuite
-#     cu path-uri locale relative
+#   - the original paths were from Google Colab (/content/dataset) - replaced
+#     with local relative paths
 
-path: ./data_raw   # radacina dataset-ului, relativa la locul unde rulezi scriptul
-train: train/images
-val: val/images
+path: ./data_raw   # dataset root, relative to where the script is run
+train: train_split.txt   # 90% of the original (train+val), randomly re-split (see src/data_utils.py resplit_train_val)
+val: val_split.txt       # 10% of the original (train+val)
 test: test/images
 
 nc: 11

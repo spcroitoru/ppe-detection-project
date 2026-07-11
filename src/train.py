@@ -26,6 +26,9 @@ def train_model(
     imgsz: int = DEFAULT_TRAIN_PARAMS["imgsz"],
     batch: int = DEFAULT_TRAIN_PARAMS["batch"],
     device=DEFAULT_TRAIN_PARAMS["device"],
+    patience: int = 10,       # early stopping: stop if val loss doesn't improve for N epochs
+    lr0: float = 0.01,        # initial learning rate
+    lrf: float = 0.01,        # final learning rate = lr0 * lrf (gradually reduced)
     project: str = "runs_test",
     name: str = "smoke_test",
     exist_ok: bool = True,
@@ -45,6 +48,9 @@ def train_model(
         imgsz=imgsz,
         batch=batch,
         device=device,
+        patience=patience,
+        lr0=lr0,
+        lrf=lrf,
         project=project,
         name=name,
         exist_ok=exist_ok,

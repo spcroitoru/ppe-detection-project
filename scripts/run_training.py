@@ -1,5 +1,6 @@
 """
-Entry point for training - smoke test with default parameters.
+Entry point for training - full pipeline test with early stopping and
+learning rate reduction (Step 6).
 The actual logic lives in src/train.py; this file just calls it.
 
 Run from the project root:
@@ -16,10 +17,11 @@ from src.train import train_model
 if __name__ == "__main__":
     train_model(
         model_name="yolov8n.pt",
-        epochs=3,
+        epochs=50,          # more epochs, to see the effect of early stopping / LR reduction
         imgsz=416,
         batch=8,
         device=0,
+        patience=10,
         project="runs_test",
-        name="smoke_test_refactored",  # different name, so we don't overwrite the original run
+        name="pipeline_test",
     )

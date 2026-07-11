@@ -1,14 +1,13 @@
 # --- Core ML ---
-# NOTA: torch si torchvision se instaleaza SEPARAT (vezi README / instructiuni Pas 1),
-# in functie de CPU vs GPU / placa video, pentru a lua build-ul CUDA corect.
+# NOTE: torch and torchvision are installed SEPARATELY (see README / Step 1 instructions),
+# depending on CPU vs GPU, to get the correct CUDA build.
 ultralytics>=8.3.40
-
 # --- Experiment tracking ---
 mlflow>=2.18.0
-
-# --- EDA / Vizualizare ---
-# NOTA: fara versiuni fixate stricte - Python 3.14 e nou, iar versiunile vechi fixate nu au wheel-uri precompilate pentru 3.14 (ar forta compilare locala,
-# ceea ce cere Visual Studio Build Tools). Lasam pip sa aleaga cea mai noua versiune compatibila, care are deja wheel pentru 3.14.
+# --- EDA / Visualization ---
+# NOTE: no strict pinned versions - Python 3.14 is new, and old pinned versions don't have
+# precompiled wheels for 3.14 (would force local compilation, requiring Visual Studio Build Tools).
+# Letting pip pick the newest compatible version, which already has a wheel for 3.14.
 jupyter>=1.1.1
 notebook>=7.3.1
 matplotlib>=3.10.0
@@ -17,11 +16,9 @@ pandas>=2.2.3
 numpy>=2.1.0
 opencv-python>=4.10.0
 Pillow>=11.0.0
-
-# --- Testare ---
+# --- Testing ---
 pytest>=8.3.4
 pytest-cov>=6.0.0
-
-# --- Utilitare ---
+# --- Utilities ---
 pyyaml>=6.0.2
 tqdm>=4.67.1

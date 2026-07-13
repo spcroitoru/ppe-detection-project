@@ -182,8 +182,23 @@ dataset size/imbalance rather than training configuration, consistent with the E
   mains power) caused significant GPU throttling - epoch time increased from ~8.5 min to
   ~29 min. Reconnecting to power restored normal speed. This did not affect training
   correctness, only wall-clock duration.
-  
+  **Manual MLflow backfill (iterative process):** the resumed training segment
+(epochs 42-50) initially didn't appear in MLflow at all, due to the tracking
+URI issue described above. The first fix attempt created a *separate* MLflow
+run (`pipeline_test_imgsz640_sgd_manual_import`) with the final metrics and
+model artifact manually logged - functional, but left the experiment split
+across two disconnected runs (epochs 1-42 auto-logged in the original run,
+epochs 42-50 in a new one). This was then corrected by re-opening the
+*original* run via its `run_id` (`mlflow.start_run(run_id=...)`) and logging
+the final metrics and model artifact directly into it, unifying the full
+1-50 epoch experiment into a single MLflow run. The separate, now-redundant
+run was deleted for a clean experiment history.
 
+*(Note: MLflow's displayed "Duration" for this run reflects wall-clock time
+across multiple sessions - including the power interruption, transport
+pause, and manual backfill steps - not pure GPU compute time.)*
+
+**Lessons learned:**
 **Lessons learned:**
 1. Always assign a unique, descriptive `name` per experiment *before* starting training.
 2. Any standalone resume/training script must explicitly set MLflow environment
@@ -191,8 +206,13 @@ dataset size/imbalance rather than training configuration, consistent with the E
 3. Keep the laptop connected to mains power for any multi-hour training run.
 4. MLflow's artifact store (`mlartifacts/`) is a reliable recovery point if the working
    directory (`runs_test/`) is accidentally overwritten.
-
-
+5. When backfilling missing MLflow data after a tracking failure, prefer re-opening
+   the *original* run via `mlflow.start_run(run_id=...)` rather than creating a new
+   run - this keeps the full experiment history in one place instead of splitting it
+   across multiple disconnected runs that then need manual cleanup.
+6. MLflow metric names cannot contain parentheses or most special characters
+   (e.g. `mAP50(B)` is invalid) - stick to alphanumerics, underscores, dashes,
+   periods, spaces, and slashes.
 
 ## Step progress
 

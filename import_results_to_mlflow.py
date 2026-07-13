@@ -1,30 +1,20 @@
 """
-Manually logs the final results of the imgsz=640+SGD experiment into MLflow,
-since the resumed segment (epochs 42-50) failed to auto-log due to a missing
-MLFLOW_TRACKING_URI environment variable in the standalone resume script.
+Appends the final results (epochs 42-50) directly to the ORIGINAL MLflow run
+(rather than creating a separate manual-import run), so the experiment stays
+as a single, continuous record.
 """
 import mlflow
 
 mlflow.set_tracking_uri("http://127.0.0.1:5000")
-mlflow.set_experiment("ppe-detection")
 
-with mlflow.start_run(run_name="pipeline_test_imgsz640_sgd_manual_import"):
-    mlflow.log_params({
-        "model_name": "yolov8n.pt",
-        "epochs": 50,
-        "imgsz": 640,
-        "batch": 8,
-        "optimizer": "SGD",
-        "patience": 10,
-        "lr0": 0.01,
-        "lrf": 0.01,
-    })
+ORIGINAL_RUN_ID = "c120d8eaea414214ae30ab66758fe8c2"
 
+with mlflow.start_run(run_id=ORIGINAL_RUN_ID):
     mlflow.log_metrics({
-        "mAP50": 0.708,
-        "mAP50-95": 0.420,
-        "precision": 0.771,
-        "recall": 0.707,
+        "mAP50_final": 0.708,
+        "mAP50-95_final": 0.420,
+        "precision_final": 0.771,
+        "recall_final": 0.707,
         "mAP50_Helmet": 0.936,
         "mAP50_Safety_Vest": 0.893,
         "mAP50_Safety_goggles": 0.608,
@@ -36,11 +26,11 @@ with mlflow.start_run(run_name="pipeline_test_imgsz640_sgd_manual_import"):
         "mAP50_Person": 0.990,
         "mAP50_Slippers": 0.259,
         "mAP50_NO_Gloves": 0.555,
-    })
+    }, step=50)
 
     mlflow.log_artifact(
         "runs/detect/runs_test/exp_imgsz640_sgd_final/weights/best.pt",
         artifact_path="weights"
     )
 
-    print("Manual import complete - check MLflow UI for the new run.")
+    print("Successfully appended final results to the original run.")

@@ -182,6 +182,7 @@ dataset size/imbalance rather than training configuration, consistent with the E
   mains power) caused significant GPU throttling - epoch time increased from ~8.5 min to
   ~29 min. Reconnecting to power restored normal speed. This did not affect training
   correctness, only wall-clock duration.
+  
 
 **Lessons learned:**
 1. Always assign a unique, descriptive `name` per experiment *before* starting training.

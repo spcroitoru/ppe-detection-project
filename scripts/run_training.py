@@ -18,10 +18,11 @@ if __name__ == "__main__":
     train_model(
         model_name="yolov8n.pt",
         epochs=50,          # more epochs, to see the effect of early stopping / LR reduction
-        imgsz=416,
+        imgsz=640,
         batch=8,
         device=0,
         patience=10,
+        optimizer="SGD",
         project="runs_test",
-        name="pipeline_test",
+        name="exp_imgsz640_sgd",
     )

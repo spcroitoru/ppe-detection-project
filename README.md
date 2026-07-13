@@ -116,6 +116,83 @@ epochs, preventing wasted compute and overfitting.
 factor) parameters - Ultralytics' built-in scheduler gradually reduces the
 learning rate over the course of training.
 
+## Step 7 notes - Experimentation
+
+## Step 7 notes - Experimentation
+
+**Experiment 1: imgsz=640 + SGD optimizer** (run: `pipeline_test`, ~7h total training time
+across interruptions)
+
+Testing whether higher input resolution (640 vs 416, Step 6 baseline) combined with an
+explicit SGD optimizer (instead of Ultralytics' auto-selected AdamW) improves detection
+accuracy, especially for small/underrepresented objects. Resolution and optimizer were
+changed together in a single run rather than isolated separately, due to time constraints -
+a known methodological limitation, documented here rather than tested for.
+
+
+**Final results (50 epochs complete):**
+
+| Metric | Step 6 baseline (imgsz=416, AdamW) | This experiment (imgsz=640, SGD) |
+|---|---|---|
+| mAP50 | 0.574 | **0.708** |
+| mAP50-95 | 0.322 | **0.420** |
+
+Per-class improvements were substantial across the board, including previously weak
+classes:
+- `Helmet`: 0.776 -> 0.936
+- `NO_Vest`: 0.892 -> 0.981
+- `Person`: 0.971 -> 0.990
+- `NO_Gloves`: 0.137 -> 0.555 (largest relative improvement)
+- `Safety_goggles`: 0.609 -> 0.608 (unchanged - still limited by very few examples, 18 images)
+- `Slippers`: 0.206 -> 0.259 (modest improvement - still limited by few examples, 57 images)
+
+**Conclusion:** the imgsz=640 + SGD combination clearly outperforms the Step 6 baseline.
+Remaining weak classes (`Safety_goggles`, `Slippers`) appear to be limited primarily by
+dataset size/imbalance rather than training configuration, consistent with the EDA findings.
+
+**Troubleshooting - training interruptions and recovery:**
+- The training machine lost power partway through the run, interrupting the process
+  mid-training (around epoch 36-42, across two separate interruptions - one full power
+  loss, one intentional pause for transport).
+- **Root cause of a data-loss risk:** `scripts/run_training.py` had not been updated with
+  a unique `name` parameter for this experiment - it reused `name="pipeline_test"` from
+  the Step 6 baseline run. Restarting training with this script would have overwritten the
+  Step 6 baseline's saved weights.
+- **Recovery:** the Step 6 baseline model (imgsz=416, 50 epochs, mAP50=0.574) was
+  recovered from MLflow's artifact store (`mlartifacts/<experiment_id>/<run_id>/artifacts/weights/best.pt`),
+  which keeps a separate, run-specific copy independent of the `runs_test/` working
+  directory - this is what made recovery possible.
+- **Resuming training:** Ultralytics supports `model.train(resume=True)` when loading
+  from a `last.pt` checkpoint, restoring the full training state (optimizer, learning
+  rate schedule, early-stopping patience counter). On Windows, this requires wrapping
+  the script in `if __name__ == "__main__":`, since Ultralytics' parallel data loading
+  workers otherwise fail to spawn correctly.
+- **Important discovery:** a checkpoint (`last.pt`) internally embeds its original run
+  configuration (including `name`), which Ultralytics uses on resume regardless of the
+  file's current folder location - renaming the containing folder does not change where
+  resumed training writes its output. This caused some confusion when a folder was
+  renamed mid-experiment; renaming should only be done after training is fully complete.
+- **MLflow tracking gap:** a standalone `resume_training.py` script (not going through
+  `src/train.py`) did not set the `MLFLOW_TRACKING_URI` environment variable, causing
+  MLflow to fail silently for the final resumed segment (epochs 42-50): `WARNING MLflow:
+  Failed to initialize... Not tracking this run`. The final metrics were still captured
+  from the training console output and recorded here manually; the trained model
+  weights themselves were unaffected (saved to disk independently of MLflow).
+- **Performance note:** running on battery power (after an unexpected disconnect from
+  mains power) caused significant GPU throttling - epoch time increased from ~8.5 min to
+  ~29 min. Reconnecting to power restored normal speed. This did not affect training
+  correctness, only wall-clock duration.
+
+**Lessons learned:**
+1. Always assign a unique, descriptive `name` per experiment *before* starting training.
+2. Any standalone resume/training script must explicitly set MLflow environment
+   variables, matching what `src/train.py` does - it's not inherited automatically.
+3. Keep the laptop connected to mains power for any multi-hour training run.
+4. MLflow's artifact store (`mlartifacts/`) is a reliable recovery point if the working
+   directory (`runs_test/`) is accidentally overwritten.
+
+
+
 ## Step progress
 
 - [x] Step 1: Repo + Python env

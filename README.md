@@ -237,7 +237,7 @@ dataset size/imbalance rather than training configuration, consistent with the E
     folder (tracked in git) with one test image, independent of the raw
     dataset.
 
-## Troubleshooting summary - today's session
+## Troubleshooting summary
 
 **1. Training interruption, near data-loss, and recovery (Step 7)**
 

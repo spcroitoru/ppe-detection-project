@@ -1,0 +1,30 @@
+name: Dockerfile Build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t ppe-detection:test .
+
+      - name: Verify image runs correctly on a test image
+        run: |
+          mkdir -p output
+          docker run --rm \
+            -v ${{ github.workspace }}/data_raw/test/images:/input \
+            -v ${{ github.workspace }}/output:/output \
+            ppe-detection:test \
+            /input/ananya_general_images_126.jpeg /output/result.jpg
+
+      - name: Confirm output file was created
+        run: test -f output/result.jpg && echo "Docker image works correctly"

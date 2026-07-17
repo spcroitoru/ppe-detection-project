@@ -1,4 +1,4 @@
-name: Dockerfile Build
+name: Docker Build
 
 on:
   push:
@@ -21,10 +21,10 @@ jobs:
         run: |
           mkdir -p output
           docker run --rm \
-            -v ${{ github.workspace }}/data_raw/test/images:/input \
+            -v ${{ github.workspace }}/sample_images:/input \
             -v ${{ github.workspace }}/output:/output \
             ppe-detection:test \
-            /input/ananya_general_images_126.jpeg /output/result.jpg
+            /input/test_image.jpg /output/result.jpg
 
       - name: Confirm output file was created
         run: test -f output/result.jpg && echo "Docker image works correctly"

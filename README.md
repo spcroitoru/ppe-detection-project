@@ -214,104 +214,238 @@ dataset size/imbalance rather than training configuration, consistent with the E
   import inside `run_webcam_inference()`, where it's actually needed -
   `draw_detections()` itself has no dependency on it.
 
-**Troubleshooting - training interruptions and recovery:**
-- The training machine lost power partway through the run, interrupting the process
-  mid-training (around epoch 36-42, across two separate interruptions - one full power
-  loss, one intentional pause for transport).
-- **Root cause of a data-loss risk:** `scripts/run_training.py` had not been updated with
-  a unique `name` parameter for this experiment - it reused `name="pipeline_test"` from
-  the Step 6 baseline run. Restarting training with this script would have overwritten the
-  Step 6 baseline's saved weights.
-- **Recovery:** the Step 6 baseline model (imgsz=416, 50 epochs, mAP50=0.574) was
-  recovered from MLflow's artifact store (`mlartifacts/<experiment_id>/<run_id>/artifacts/weights/best.pt`),
-  which keeps a separate, run-specific copy independent of the `runs_test/` working
-  directory - this is what made recovery possible.
-- **Resuming training:** Ultralytics supports `model.train(resume=True)` when loading
-  from a `last.pt` checkpoint, restoring the full training state (optimizer, learning
-  rate schedule, early-stopping patience counter). On Windows, this requires wrapping
-  the script in `if __name__ == "__main__":`, since Ultralytics' parallel data loading
-  workers otherwise fail to spawn correctly.
-- **Important discovery:** a checkpoint (`last.pt`) internally embeds its original run
-  configuration (including `name`), which Ultralytics uses on resume regardless of the
-  file's current folder location - renaming the containing folder does not change where
-  resumed training writes its output. This caused some confusion when a folder was
-  renamed mid-experiment; renaming should only be done after training is fully complete.
-- **MLflow tracking gap:** a standalone `resume_training.py` script (not going through
-  `src/train.py`) did not set the `MLFLOW_TRACKING_URI` environment variable, causing
-  MLflow to fail silently for the final resumed segment (epochs 42-50): `WARNING MLflow:
-  Failed to initialize... Not tracking this run`. The final metrics were still captured
-  from the training console output and recorded here manually; the trained model
-  weights themselves were unaffected (saved to disk independently of MLflow).
-- **Performance note:** running on battery power (after an unexpected disconnect from
-  mains power) caused significant GPU throttling - epoch time increased from ~8.5 min to
-  ~29 min. Reconnecting to power restored normal speed. This did not affect training
-  correctness, only wall-clock duration.
-  **Manual MLflow backfill (iterative process):** the resumed training segment
-  (epochs 42-50) initially didn't appear in MLflow at all, due to the tracking
-  URI issue described above. The first fix attempt created a *separate* MLflow
-  run (`pipeline_test_imgsz640_sgd_manual_import`) with the final metrics and
-  model artifact manually logged - functional, but left the experiment split  
-  across two disconnected runs (epochs 1-42 auto-logged in the original run,
-  pochs 42-50 in a new one). This was then corrected by re-opening the
-  *original* run via its `run_id` (`mlflow.start_run(run_id=...)`) and logging
-  the final metrics and model artifact directly into it, unifying the full
-  1-50 epoch experiment into a single MLflow run. The separate, now-redundant
-  run was deleted for a clean experiment history.
+  ## Step 9 notes - Automated Docker build
+
+- Packaged the best-performing model (`exp_yolov8s_imgsz640_sgd`, mAP50=0.747)
+  into `models/best.pt`, force-added to git despite the `*.pt` gitignore rule
+  (which otherwise correctly excludes training checkpoints).
+- Added `src/predict_image.py`: runs detection on a single static image
+  (rather than webcam), suitable for a containerized environment without
+  camera access. Reuses `draw_detections()` from `src/inference.py`.
+- Added a minimal `Dockerfile` (Python 3.12-slim base, OpenCV system deps,
+  a slimmed-down `requirements-docker.txt` without dev/EDA dependencies).
+- Added `.github/workflows/docker-build.yml`: builds the Docker image and
+  runs it against a test image on every push, confirming the packaged model
+  produces a valid output - not just that the build succeeds.
+- **Troubleshooting:**
+  - Initial build failed: `src/config.py` requires `data.yaml` to load class
+    names, but the Dockerfile only copied `src/` and `models/` - fixed by
+    also copying `data.yaml`.
+  - Second failure: the verification step tried to mount a test image from
+    `data_raw/test/images/`, but `data_raw/` is gitignored (not present in
+    the CI checkout) - fixed by adding a small dedicated `sample_images/`
+    folder (tracked in git) with one test image, independent of the raw
+    dataset.
+
+## Troubleshooting summary - today's session
+
+**1. Training interruption, near data-loss, and recovery (Step 7)**
+
+- The training machine lost power partway through the run, interrupting the
+  process mid-training (around epoch 36-42, across two separate
+  interruptions - one full power loss, one intentional pause for transport).
+- **Root cause of a data-loss risk:** `scripts/run_training.py` had not been
+  updated with a unique `name` parameter for the imgsz=640+SGD experiment -
+  it still reused `name="pipeline_test"` from the Step 6 baseline run.
+  Restarting training with this script would have overwritten the Step 6
+  baseline's saved weights in `runs_test/pipeline_test/weights/`.
+- **Recovery:** the Step 6 baseline model (imgsz=416, 50 epochs,
+  mAP50=0.574) was recovered from MLflow's artifact store
+  (`mlartifacts/<experiment_id>/<run_id>/artifacts/weights/best.pt`), which
+  keeps a separate, run-specific copy independent of the `runs_test/`
+  working directory - this is what made recovery possible. The interrupted
+  experiment's own checkpoint was also backed up before any further changes,
+  and the folder was renamed to `exp_imgsz640_sgd` (only after training
+  fully completed) for clarity, with `scripts/run_training.py` fixed to use
+  a unique `name` going forward.
+- **Resuming training:** Ultralytics supports `model.train(resume=True)`
+  when loading from a `last.pt` checkpoint, restoring the full training
+  state (optimizer, learning rate schedule, early-stopping patience
+  counter). On Windows, this requires wrapping the script in
+  `if __name__ == "__main__":`, since Ultralytics' parallel data loading
+  workers otherwise fail to spawn correctly (a Windows-specific
+  `multiprocessing` requirement).
+- A standalone `resume_training.py` script, run from the wrong directory
+  (`venv/` instead of the project root), caused relative paths to fail
+  entirely - fixed by verifying the script's location before every run.
+- **Important discovery:** a checkpoint (`last.pt`) internally embeds its
+  original run configuration (including `name`), which Ultralytics uses on
+  resume *regardless of the file's current folder location* - renaming the
+  containing folder mid-experiment does not change where resumed training
+  writes its output. This caused real confusion when a folder was renamed
+  too early; renaming should only be done after training is fully complete.
+
+**2. MLflow tracking gap and manual backfill (Step 7)**
+
+- The same standalone `resume_training.py` script (not going through
+  `src/train.py`) did not set the `MLFLOW_TRACKING_URI` /
+  `MLFLOW_EXPERIMENT_NAME` environment variables, causing MLflow to fail
+  silently for the final resumed segment (epochs 42-50):
+  `WARNING MLflow: Failed to initialize... Not tracking this run`. The
+  trained model weights themselves were unaffected (saved to disk
+  independently of MLflow); only the tracked metrics were missing.
+- **Manual backfill (iterative process):** the final metrics were first
+  captured from the training console output, then logged into MLflow via a
+  small script (`import_results_to_mlflow.py`). The first attempt created a
+  *separate* MLflow run (`pipeline_test_imgsz640_sgd_manual_import`) -
+  functional, but left the experiment split across two disconnected runs
+  (epochs 1-42 auto-logged in the original run, epochs 42-50 in a new one).
+  This was then corrected by re-opening the *original* run via its `run_id`
+  (`mlflow.start_run(run_id=...)`) and logging the final metrics and model
+  artifact directly into it, unifying the full 1-50 epoch experiment into a
+  single MLflow run. The separate, now-redundant run was deleted for a
+  clean experiment history.
+- Along the way, `mlflow.log_metrics()` initially failed with
+  `INVALID_PARAMETER_VALUE` because a metric name contained parentheses
+  (`mAP50(B)`) - MLflow metric names only allow alphanumerics, underscores,
+  dashes, periods, spaces, and slashes.
+
+**3. Power/hardware performance impact (Step 7)**
+
+- Running on battery power (after the unexpected disconnect from mains
+  power) caused significant GPU throttling - epoch time increased from
+  ~8.5 min to ~29 min - before the battery drained and training stopped.
+  Reconnecting to power restored normal speed immediately. This did not
+  affect training correctness (resume fully restores state), only
+  wall-clock duration.
+
+**4. CI test collection failure (Step 8)**
+
+- `src/inference.py` imported `ultralytics` (and therefore `torch`) at
+  module level. Since the CI environment intentionally doesn't install
+  these heavy dependencies (to keep test runs fast), importing the module
+  to test the lightweight `draw_detections()` function failed with
+  `ModuleNotFoundError`, aborting collection of the *entire* test file.
+  Fixed by moving the `ultralytics` import inside `run_webcam_inference()`,
+  the only function that actually needs it.
+- A copy-paste mistake caused `tests/test_inference.py` to accidentally
+  contain a full duplicate of `src/inference.py`'s content instead of
+  actual test functions - pytest silently collected 0 tests from that file
+  with no error, until compared against the expected test count (11 vs the
+  9 that were actually running).
+
+**5. Docker build failures (Step 9)**
+
+- First failure: `src/config.py` requires `data.yaml` to load class names
+  at import time, but the `Dockerfile` only copied `src/` and `models/` -
+  fixed by adding `COPY data.yaml .`.
+- Second failure: the CI verification step tried to mount a test image from
+  `data_raw/test/images/`, but `data_raw/` is excluded via `.gitignore` and
+  therefore doesn't exist in the GitHub Actions checkout - fixed by adding
+  a small, dedicated `sample_images/` folder (explicitly tracked in git).
+- Separately, the trained model (`models/best.pt`) was excluded by the
+  project's blanket `*.pt` gitignore rule (meant for training checkpoints
+  in `runs/`) - fixed with `git add -f models/best.pt`, tracking this one
+  file without loosening the rule for others.
+
+**Common thread across all categories:** most of today's issues were
+invisible locally and only surfaced in constrained contexts - a resumed
+process missing inherited environment variables, a CI runner without heavy
+ML libraries, or a Docker container without the full project directory.
+Testing "does it work on my machine" was insufficient; testing "does it
+work in the actual target environment" caught every one of these issues.
 
   *(Note: MLflow's displayed "Duration" for this run reflects wall-clock time
   across multiple sessions - including the power interruption, transport
   pause, and manual backfill steps - not pure GPU compute time.)*
 
-**Lessons learned:**
-1. Always assign a unique, descriptive `name` per experiment *before* starting training.
-2. Any standalone resume/training script must explicitly set MLflow environment
-   variables, matching what `src/train.py` does - it's not inherited automatically.
-3. Keep the laptop connected to mains power for any multi-hour training run.
-4. MLflow's artifact store (`mlartifacts/`) is a reliable recovery point if the working
-   directory (`runs_test/`) is accidentally overwritten.
-5. When backfilling missing MLflow data after a tracking failure, prefer re-opening
-   the *original* run via `mlflow.start_run(run_id=...)` rather than creating a new
-   run - this keeps the full experiment history in one place instead of splitting it
-   across multiple disconnected runs that then need manual cleanup.
-6. MLflow metric names cannot contain parentheses or most special characters
-   (e.g. `mAP50(B)` is invalid) - stick to alphanumerics, underscores, dashes,
-   periods, spaces, and slashes.
-7.  When combining multiple experimental variables (e.g. resolution + optimizer,
-   or architecture + resolution + optimizer) in a single run due to time
-   constraints, document this explicitly as a methodological limitation -
-   results can't be attributed to a single cause, but the combined
-   configuration is still valid to report.
-8. Bigger isn't always slower in the way you'd expect: yolov8s took ~2x the
-   time per epoch compared to yolov8n at the same settings, but delivered
-   proportionally larger accuracy gains.
-9. Consistently, the weakest-performing classes across all three experiments
+## Lessons learned - full project summary (Steps 4-9)
+
+**Environment & tooling:**
+1. Fast-moving Python versions (e.g. 3.14) can break third-party libraries
+   before they officially support it - MLflow 3.14.0 failed on Python 3.14
+   due to an `importlib.abc.Traversable` relocation; patched locally via a
+   try/except fallback in the installed package.
+2. Always verify a file's actual saved content (e.g. `type filename`) before
+   assuming an edit was applied correctly - several CI failures traced back
+   to edits that were made to the wrong file or not saved as expected.
+
+**Code organization (Step 5):**
+3. Refactoring into `src/` (reusable logic) + `scripts/` (thin entry points)
+   pays off almost immediately - it made later steps (tests, Docker) much
+   easier, since functions could be imported and tested in isolation.
+4. Keep configuration (paths, class names, colors) centralized in one module
+   (`config.py`) - avoids inconsistencies and makes cross-file changes
+   (e.g. renaming report fields to English) a single-location edit.
+
+**Data pipeline (Step 6):**
+5. A dataset can *look* clean while a loader silently drops files with
+   unsupported extensions - `.jfif` images were invisible to Ultralytics'
+   training scanner despite passing manual EDA checks, because `.jfif` isn't
+   in its recognized `IMG_FORMATS` list. Cross-check custom data-loading
+   code against the training framework's actual accepted formats.
+6. `early stopping` and `learning rate scheduling` are complementary, not
+   redundant: LR reduction helps fine-tune convergence, while patience-based
+   early stopping prevents wasted compute once no further improvement is
+   found - both were validated empirically across multiple training runs.
+
+**Experimentation (Step 7):**
+7. Always assign a unique, descriptive `name` per experiment *before*
+   starting training - reusing a name (even accidentally) causes silent
+   overwriting of previous results in the working directory.
+8. When combining multiple experimental variables (e.g. resolution +
+   optimizer, or architecture + resolution + optimizer) in a single run due
+   to time constraints, document this explicitly as a methodological
+   limitation - results can't be attributed to a single cause, but the
+   combined configuration is still valid to report.
+9. Consistently, the weakest-performing classes across all experiments
    (`Slippers`, `Safety_goggles`) were the ones with the fewest training
-   examples (57 and 18 images respectively) - reinforcing that, past a
-   certain point, more epochs/better optimizers/bigger models can't fully
-   compensate for insufficient data on a specific class.
-10. Unit tests for a small, well-defined set of preprocessing/postprocessing
-   functions (not the entire codebase) is enough to satisfy a "testing"
-   requirement - exhaustive coverage isn't the goal, demonstrating the
-   practice is.
-11. CI environments are intentionally minimal - installing heavy dependencies
-   (like `torch`/`ultralytics`) just to test a small utility function is
-   wasteful and slows down every push. Structuring code so that heavy
-   imports are deferred to inside the functions that actually need them
-   (rather than at module level) keeps modules testable in lightweight
-   environments.
-12. A module-level import failing during test collection (e.g.
-   `ModuleNotFoundError`) aborts the *entire* test file's collection, not
-   just the tests that would have used that import - one bad import at the
-   top of a file can silently hide otherwise-passing tests.
-13. Always verify a file's actual saved content (`type filename`) before
-   assuming an edit was applied correctly, especially after copy-pasting
-   similar code between multiple files (e.g. accidentally pasting
-   `inference.py`'s content into `test_inference.py`) - this caused two
-   separate rounds of CI failures before being caught.
-14. GitHub Actions occasionally shows deprecation warnings (e.g. Node.js
-   version) for third-party actions unrelated to the project's own code -
-   these don't block the pipeline and can be addressed later by bumping
-   action versions (e.g. `actions/checkout@v4` -> `@v5`).
+   examples - reinforcing that better training configuration can't fully
+   compensate for insufficient data on a specific class past a certain point.
+10. Any standalone resume/training script must explicitly set MLflow
+    environment variables, matching what the main training entry point does -
+    it's not inherited automatically between separate Python processes.
+11. A checkpoint (`last.pt`) internally embeds its original run configuration
+    (including its `name`), which Ultralytics uses on resume regardless of
+    the file's current folder location - renaming the containing folder mid-
+    experiment doesn't change where resumed training writes its output;
+    rename only after training is fully complete.
+12. Keep the training machine connected to mains power for any multi-hour
+    run - running on battery caused significant GPU throttling (epoch time
+    increased ~3.4x) and eventually a hard stop when the battery drained.
+13. MLflow's artifact store (`mlartifacts/`) is a reliable recovery point if
+    the working directory (`runs_test/`) is accidentally overwritten - it
+    keeps a separate, run-specific copy of saved models.
+14. When backfilling missing MLflow data after a tracking failure, prefer
+    re-opening the *original* run via `mlflow.start_run(run_id=...)` rather
+    than creating a new run - keeps the full experiment history in one place
+    instead of splitting it across disconnected runs.
+15. MLflow metric names cannot contain parentheses or most special
+    characters - stick to alphanumerics, underscores, dashes, periods,
+    spaces, and slashes.
+
+**Testing & CI (Step 8):**
+16. A small, well-defined set of unit tests for preprocessing/postprocessing
+    functions is enough to satisfy a "testing" requirement - exhaustive
+    coverage isn't the goal, demonstrating the practice is.
+17. CI environments are intentionally minimal - installing heavy dependencies
+    (like `torch`/`ultralytics`) just to test a small utility function slows
+    down every push. Deferring heavy imports to inside the functions that
+    actually need them (rather than at module level) keeps modules testable
+    in lightweight environments.
+18. A module-level import failing during test collection aborts the *entire*
+    test file's collection, not just the tests that would have used that
+    import - one bad import at the top of a file can hide otherwise-passing
+    tests.
+
+**Docker & deployment (Step 9):**
+19. `.gitignore` rules apply globally and silently - files excluded for good
+    reasons during development (large model checkpoints, raw datasets) can
+    unexpectedly break a build pipeline that later needs one specific file
+    from an otherwise-excluded category.
+20. `git add -f` is the right tool for deliberately including a normally-
+    ignored file, without loosening the `.gitignore` rule for everything
+    else of that type.
+21. A Docker image only contains what's explicitly `COPY`-ed in the
+    Dockerfile - it's easy to forget a supporting file (like `data.yaml`)
+    that a module depends on via a relative path, since it works fine
+    locally where the full project structure is present.
+22. For CI verification steps, prefer small, dedicated, git-tracked test
+    fixtures over reaching into gitignored data directories - keeps the
+    pipeline self-contained and reproducible.
+23. Testing a Docker build doesn't require Docker installed locally - GitHub
+    Actions runners already have it, making push/CI-log iteration a valid
+    workflow when local Docker isn't available.
 
 ## Step progress
 
@@ -323,5 +457,5 @@ dataset size/imbalance rather than training configuration, consistent with the E
 - [x] Step 6: Train/val/test pipeline + early stopping + LR scheduler
 - [x] Step 7: Experimenting with different configurations
 - [x] Step 8: Tests + CI
-- [ ] Step 9: Automated Docker build (GitHub Actions)
+- [x] Step 9: Automated Docker build (GitHub Actions)
 - [ ] Step 10: PPT presentation

@@ -4,7 +4,6 @@ Boxes are drawn manually, colored by class: GREEN = PPE present/correct,
 RED = PPE missing/violation (per RED_CLASSES in config.py).
 """
 import cv2
-from ultralytics import YOLO
 
 from src.config import RED_CLASSES, COLOR_GREEN, COLOR_RED
 
@@ -35,6 +34,10 @@ def run_webcam_inference(model_path: str, conf: float = 0.25, imgsz: int = 416, 
     Run live inference on the webcam, with color-coded detections.
     Press 'q' in the video window to quit.
     """
+    from ultralytics import YOLO  # imported here, not at module level, so this
+                                    # module can be imported/tested without
+                                    # requiring the heavy ultralytics/torch install
+
     model = YOLO(model_path)
 
     results_generator = model.predict(

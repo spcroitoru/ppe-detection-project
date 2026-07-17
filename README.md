@@ -195,6 +195,25 @@ dataset size/imbalance rather than training configuration, consistent with the E
   | 3 | **yolov8s, imgsz=640, SGD** | **0.747** | **0.473** |
   Best model: `exp_yolov8s_imgsz640_sgd`
 
+  ## Step 8 notes - Tests + CI
+
+- Added `tests/test_data_utils.py` (9 tests) covering preprocessing functions:
+  `list_images`, `check_data_quality`, `clean_labels`, `convert_jfif_to_jpg`,
+  `resplit_train_val`. Uses temporary directories with synthetic data for
+  fast, isolated tests.
+- Added `tests/test_inference.py` (2 tests) covering postprocessing:
+  `draw_detections`, using mock objects to simulate Ultralytics' detection
+  results without requiring a real model or camera.
+- Added `.github/workflows/tests.yml`: runs `pytest tests/` automatically on
+  every push/PR to `main`, via GitHub Actions.
+- **CI troubleshooting:** initial CI runs failed because `src/inference.py`
+  imported `ultralytics` (and therefore `torch`) at module level. Since the
+  CI environment intentionally doesn't install these heavy dependencies (to
+  keep test runs fast), importing the module for testing `draw_detections`
+  failed with `ModuleNotFoundError`. Fixed by moving the `ultralytics`
+  import inside `run_webcam_inference()`, where it's actually needed -
+  `draw_detections()` itself has no dependency on it.
+
 **Troubleshooting - training interruptions and recovery:**
 - The training machine lost power partway through the run, interrupting the process
   mid-training (around epoch 36-42, across two separate interruptions - one full power
@@ -257,6 +276,42 @@ dataset size/imbalance rather than training configuration, consistent with the E
 6. MLflow metric names cannot contain parentheses or most special characters
    (e.g. `mAP50(B)` is invalid) - stick to alphanumerics, underscores, dashes,
    periods, spaces, and slashes.
+7.  When combining multiple experimental variables (e.g. resolution + optimizer,
+   or architecture + resolution + optimizer) in a single run due to time
+   constraints, document this explicitly as a methodological limitation -
+   results can't be attributed to a single cause, but the combined
+   configuration is still valid to report.
+8. Bigger isn't always slower in the way you'd expect: yolov8s took ~2x the
+   time per epoch compared to yolov8n at the same settings, but delivered
+   proportionally larger accuracy gains.
+9. Consistently, the weakest-performing classes across all three experiments
+   (`Slippers`, `Safety_goggles`) were the ones with the fewest training
+   examples (57 and 18 images respectively) - reinforcing that, past a
+   certain point, more epochs/better optimizers/bigger models can't fully
+   compensate for insufficient data on a specific class.
+10. Unit tests for a small, well-defined set of preprocessing/postprocessing
+   functions (not the entire codebase) is enough to satisfy a "testing"
+   requirement - exhaustive coverage isn't the goal, demonstrating the
+   practice is.
+11. CI environments are intentionally minimal - installing heavy dependencies
+   (like `torch`/`ultralytics`) just to test a small utility function is
+   wasteful and slows down every push. Structuring code so that heavy
+   imports are deferred to inside the functions that actually need them
+   (rather than at module level) keeps modules testable in lightweight
+   environments.
+12. A module-level import failing during test collection (e.g.
+   `ModuleNotFoundError`) aborts the *entire* test file's collection, not
+   just the tests that would have used that import - one bad import at the
+   top of a file can silently hide otherwise-passing tests.
+13. Always verify a file's actual saved content (`type filename`) before
+   assuming an edit was applied correctly, especially after copy-pasting
+   similar code between multiple files (e.g. accidentally pasting
+   `inference.py`'s content into `test_inference.py`) - this caused two
+   separate rounds of CI failures before being caught.
+14. GitHub Actions occasionally shows deprecation warnings (e.g. Node.js
+   version) for third-party actions unrelated to the project's own code -
+   these don't block the pipeline and can be addressed later by bumping
+   action versions (e.g. `actions/checkout@v4` -> `@v5`).
 
 ## Step progress
 

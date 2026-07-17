@@ -118,8 +118,6 @@ learning rate over the course of training.
 
 ## Step 7 notes - Experimentation
 
-## Step 7 notes - Experimentation
-
 **Experiment 1: imgsz=640 + SGD optimizer** (run: `pipeline_test`, ~7h total training time
 across interruptions)
 
@@ -149,6 +147,53 @@ classes:
 **Conclusion:** the imgsz=640 + SGD combination clearly outperforms the Step 6 baseline.
 Remaining weak classes (`Safety_goggles`, `Slippers`) appear to be limited primarily by
 dataset size/imbalance rather than training configuration, consistent with the EDA findings.
+
+**Experiment 2: yolov8s architecture** (run: `exp_yolov8s_imgsz640_sgd`, ~7h,
+  50 epochs complete, no early stopping triggered)
+
+  Building on the best configuration found so far (imgsz=640, SGD optimizer),
+  tested whether a larger model architecture (yolov8s, ~11.1M parameters vs
+  yolov8n's ~3.0M) further improves detection accuracy. This isolates a single
+  new variable (architecture) against the winning imgsz=640+SGD configuration.
+
+  **Final results (50 epochs complete):**
+
+  | Metric | imgsz=640+SGD (yolov8n) | imgsz=640+SGD (yolov8s) |
+  |---|---|---|
+  | mAP50 | 0.708 | **0.747** |
+  | mAP50-95 | 0.420 | **0.473** |
+
+  Per-class results (yolov8s):
+
+  | Class | mAP50 | mAP50-95 |
+  |---|---|---|
+  | Helmet | 0.961 | 0.670 |
+  | Safety_Vest | 0.910 | 0.585 |
+  | Safety_goggles | 0.664 | 0.389 |
+  | Safety_shoes | 0.828 | 0.447 |
+  | NO_helmet | 0.906 | 0.545 |
+  | NO_Vest | 0.983 | 0.804 |
+  | NO_goggles | 0.435 | 0.184 |
+  | No_SafetyShoes | 0.638 | 0.326 |
+  | Person | 0.993 | 0.871 |
+  | Slippers | 0.239 | 0.162 |
+  | NO_Gloves | 0.660 | 0.219 |
+
+  **Conclusion:** the larger architecture provided a further, consistent
+  improvement across nearly all classes, confirming that additional model
+  capacity helps this task. `Slippers` remains the weakest class throughout
+  all three experiments (57 training images only), reinforcing the EDA
+  finding that this is primarily a data-quantity limitation, not a training
+  configuration issue.
+
+  **Summary across all Step 6/7 experiments:**
+
+  | # | Configuration | mAP50 | mAP50-95 |
+  |---|---|---|---|
+  | 1 | Step 6 baseline: yolov8n, imgsz=416, AdamW | 0.574 | 0.322 |
+  | 2 | yolov8n, imgsz=640, SGD | 0.708 | 0.420 |
+  | 3 | **yolov8s, imgsz=640, SGD** | **0.747** | **0.473** |
+  Best model: `exp_yolov8s_imgsz640_sgd`
 
 **Troubleshooting - training interruptions and recovery:**
 - The training machine lost power partway through the run, interrupting the process
@@ -183,22 +228,21 @@ dataset size/imbalance rather than training configuration, consistent with the E
   ~29 min. Reconnecting to power restored normal speed. This did not affect training
   correctness, only wall-clock duration.
   **Manual MLflow backfill (iterative process):** the resumed training segment
-(epochs 42-50) initially didn't appear in MLflow at all, due to the tracking
-URI issue described above. The first fix attempt created a *separate* MLflow
-run (`pipeline_test_imgsz640_sgd_manual_import`) with the final metrics and
-model artifact manually logged - functional, but left the experiment split
-across two disconnected runs (epochs 1-42 auto-logged in the original run,
-epochs 42-50 in a new one). This was then corrected by re-opening the
-*original* run via its `run_id` (`mlflow.start_run(run_id=...)`) and logging
-the final metrics and model artifact directly into it, unifying the full
-1-50 epoch experiment into a single MLflow run. The separate, now-redundant
-run was deleted for a clean experiment history.
+  (epochs 42-50) initially didn't appear in MLflow at all, due to the tracking
+  URI issue described above. The first fix attempt created a *separate* MLflow
+  run (`pipeline_test_imgsz640_sgd_manual_import`) with the final metrics and
+  model artifact manually logged - functional, but left the experiment split  
+  across two disconnected runs (epochs 1-42 auto-logged in the original run,
+  pochs 42-50 in a new one). This was then corrected by re-opening the
+  *original* run via its `run_id` (`mlflow.start_run(run_id=...)`) and logging
+  the final metrics and model artifact directly into it, unifying the full
+  1-50 epoch experiment into a single MLflow run. The separate, now-redundant
+  run was deleted for a clean experiment history.
 
-*(Note: MLflow's displayed "Duration" for this run reflects wall-clock time
-across multiple sessions - including the power interruption, transport
-pause, and manual backfill steps - not pure GPU compute time.)*
+  *(Note: MLflow's displayed "Duration" for this run reflects wall-clock time
+  across multiple sessions - including the power interruption, transport
+  pause, and manual backfill steps - not pure GPU compute time.)*
 
-**Lessons learned:**
 **Lessons learned:**
 1. Always assign a unique, descriptive `name` per experiment *before* starting training.
 2. Any standalone resume/training script must explicitly set MLflow environment
@@ -222,7 +266,7 @@ pause, and manual backfill steps - not pure GPU compute time.)*
 - [x] Step 4: MLflow integration
 - [x] Step 5: Code refactoring
 - [x] Step 6: Train/val/test pipeline + early stopping + LR scheduler
-- [ ] Step 7: Experimenting with different configurations
-- [ ] Step 8: Tests + CI
+- [x] Step 7: Experimenting with different configurations
+- [x] Step 8: Tests + CI
 - [ ] Step 9: Automated Docker build (GitHub Actions)
 - [ ] Step 10: PPT presentation
